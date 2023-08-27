@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+      .pdf-thumbnail {
+        cursor: pointer;
+        width: 200px;
+        height: 200px;
+        overflow: hidden;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: border-color 0.3s, transform 0.3s;
+        position: relative;
+      }
+
+      .pdf-thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .pdf-thumbnail:hover {
+        border-color: #3498db;
+        transform: scale(1.05);
+      }
+      .pdf-thumbnail button {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #4caf50;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background-color 0.3s, transform 0.3s;
+      }
+
+      .pdf-thumbnail button:hover {
+        background-color: #45a049;
+        transform: scale(1.05) translateX(-50%);
+      }
+
+      #pdfModal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        align-items: flex-start; /* Align items to the top-left corner */
+        justify-content: flex-start; /* Align items to the top-left corner */
+        overflow-y: auto;
+        padding: 20px;
+      }
+      #closeButton {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1;
+        background-color: #fff;
+        color: #333;
+        border: none;
+        border-radius: 50%;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.3s, color 0.3s, transform 0.3s;
+      }
+
+      #closeButton:hover {
+        background-color: #333;
+        color: #fff;
+        transform: scale(1.1);
+      }
+
+      #zoomButtons {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1;
+      }
+
+      #zoomInButton,
+      #zoomOutButton {
+        background-color: #fff;
+        color: #333;
+        border: none;
+        border-radius: 5px;
+        padding: 5px 10px;
+        margin: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s, color 0.3s, transform 0.3s;
+      }
+
+      #zoomInButton:hover,
+      #zoomOutButton:hover {
+        background-color: #333;
+        color: #fff;
+        transform: scale(1.05);
+      }
+
+      #pdfContainer {
+        max-width: 80%;
+        background-color: white;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        margin: 20px auto;
+      }
+      canvas {
+        display: block;
+        margin: 10px auto;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+      }
+    </style>
+    <title>PDF Thumbnail and Preview</title>
+  </head>
+  <body>
+    <h1>PDF Thumbnail and Click to Preview Sample</h1>
+    <div class="pdf-thumbnail">
+      <img
+        id="thumbnailImage"
+        src="Monk sold his ferrari.png"
+        alt="Thumbnail Image"
+        width="70%"
+        height="70%"
+      />
+      <button id="downloadThumbnailButton">Download PDF</button>
+    </div>
+    <div style="margin: 10px">Download Pdf, If you like the sample above</div>
+
+    <div id="pdfModal">
+      <button id="closeButton">Close</button>
+      <div id="zoomButtons">
+        <button id="zoomInButton">Zoom In</button>
+        <button id="zoomOutButton">Zoom Out</button>
+      </div>
+      <div id="pdfContainer"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>
+      const thumbnailImage = document.getElementById("thumbnailImage");
+      const pdfModal = document.getElementById("pdfModal");
+      const pdfContainer = document.getElementById("pdfContainer");
+      const closeButton = document.getElementById("closeButton");
+      const zoomInButton = document.getElementById("zoomInButton");
+      const zoomOutButton = document.getElementById("zoomOutButton");
+      const pdfUrl = "The Monk who sold his ferrari.pdf"; // Replace with your PDF URL
+      const maxScrollablePages = 10; // Adjust as needed
+      let currentScale = 1.0;
+
+      thumbnailImage.addEventListener("click", () => {
+        openPdfPreview();
+      });
+
+      closeButton.addEventListener("click", () => {
+        closePdfPreview();
+      });
+
+      zoomInButton.addEventListener("click", () => {
+        zoomIn();
+      });
+
+      zoomOutButton.addEventListener("click", () => {
+        zoomOut();
+      });
+
+      function openPdfPreview() {
+        pdfModal.style.display = "flex";
+        pdfContainer.innerHTML = "";
+
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+
+        loadingTask.promise
+          .then((pdfDocument) => {
+            const numPages = Math.min(pdfDocument.numPages, maxScrollablePages);
+
+            for (let pageNumber = 1; pageNumber <= numPages; pageNumber++) {
+              pdfDocument.getPage(pageNumber).then((page) => {
+                const canvas = document.createElement("canvas");
+                pdfContainer.appendChild(canvas);
+
+                const viewport = page.getViewport({ scale: currentScale });
+                const context = canvas.getContext("2d");
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                  canvasContext: context,
+                  viewport: viewport,
+                };
+                page.render(renderContext);
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Error loading PDF:", error);
+          });
+      }
+
+      function closePdfPreview() {
+        pdfContainer.innerHTML = "";
+        pdfModal.style.display = "none";
+      }
+
+      function zoomIn() {
+        currentScale += 0.1;
+        updatePdfPreview();
+      }
+
+      function zoomOut() {
+        currentScale -= 0.1;
+        updatePdfPreview();
+      }
+
+      function updatePdfPreview() {
+        const canvasElements = pdfContainer.getElementsByTagName("canvas");
+        for (let i = 0; i < canvasElements.length; i++) {
+          canvasElements[i].remove();
+        }
+        openPdfPreview();
+      }
+      const downloadThumbnailButton = document.getElementById(
+        "downloadThumbnailButton"
+      );
+
+      downloadThumbnailButton.addEventListener("click", () => {
+        downloadPdf();
+      });
+
+      function downloadPdf() {
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.target = "_blank";
+        link.download = "document.pdf";
+        link.click();
+      }
+    </script>
+  </body>
+</html>
